@@ -56,9 +56,10 @@ router.get('/:id', async (req, res) => {
     if (!torrent) return res.status(404).json({ error: 'Torrent not found' });
 
     // Add computed fields
-    torrent.magnet = generateMagnet(torrent.infoHash, torrent.name, torrent.trackerUrl);
+    const magnet = generateMagnet(torrent.infoHash, torrent.name, torrent.trackerUrl, torrent.announceList);
     const total = (torrent.seeders || 0) + (torrent.leechers || 0);
     torrent.health = total > 0 ? Math.round(((torrent.seeders || 0) / total) * 100 * 10) / 10 : 0;
+    torrent.magnet = magnet;
 
     res.json(torrent);
   } catch (err) {

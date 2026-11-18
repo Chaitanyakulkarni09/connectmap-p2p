@@ -53,7 +53,19 @@ router.post('/', upload.single('file'), async (req, res) => {
         });
       }
 
-      const trackerUrl = parsed.announce || 'http://localhost:6969/announce';
+      // Always use this server as the primary tracker so peers announce here.
+      // The original tracker (if any) is kept as a fallback tier.
+      const serverBase = process.env.SERVER_URL ||
+        (req.headers['x-forwarded-proto']
+          ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host'] || req.headers.host}`
+          : `${req.protocol}://${req.get('host')}`);
+      const ownTrackerUrl = `${serverBase}/announce`;
+
+      // Build announce list: our tracker first, then original tiers
+      const originalTiers = parsed.announceList?.length
+        ? parsed.announceList
+        : parsed.announce ? [[parsed.announce]] : [];
+      const announceList = [[ownTrackerUrl], ...originalTiers];
 
       const torrent = await TorrentStore.create({
         infoHash: parsed.infoHash,
@@ -64,8 +76,8 @@ router.post('/', upload.single('file'), async (req, res) => {
         pieceCount: parsed.pieceCount,
         piecesHex: parsed.piecesHex,
         files: parsed.files,
-        trackerUrl,
-        announceList: parsed.announceList,
+        trackerUrl: ownTrackerUrl,
+        announceList,
         torrentFilename: req.file.filename,
         category: req.body.category || 'other',
         uploadedBy: req.body.uploadedBy || 'anonymous',

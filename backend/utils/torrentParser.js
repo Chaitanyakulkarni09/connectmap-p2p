@@ -81,11 +81,25 @@ function parseTorrent(buffer) {
 
 /**
  * Generate a magnet URI from torrent metadata
+ * Includes all announce tiers so clients use our tracker first
  */
-function generateMagnet(infoHash, name, trackerUrl) {
+function generateMagnet(infoHash, name, trackerUrl, announceList) {
   let magnet = `magnet:?xt=urn:btih:${infoHash}`;
   if (name) magnet += `&dn=${encodeURIComponent(name)}`;
-  if (trackerUrl) magnet += `&tr=${encodeURIComponent(trackerUrl)}`;
+
+  // Collect all unique tracker URLs, primary first
+  const trackers = new Set();
+  if (trackerUrl) trackers.add(trackerUrl);
+  if (announceList) {
+    for (const tier of announceList) {
+      for (const url of tier) {
+        if (url) trackers.add(url);
+      }
+    }
+  }
+  for (const tr of trackers) {
+    magnet += `&tr=${encodeURIComponent(tr)}`;
+  }
   return magnet;
 }
 

@@ -115,10 +115,11 @@ export async function getDownloadStatus(infoHash) {
 export async function getAllDownloads() {
   try {
     const { data } = await api.get('/client/status');
-    if (data?.offline) return [];
-    return Array.isArray(data) ? data : data?.downloads || [];
+    if (data?.offline) return { online: false, downloads: [] };
+    const downloads = Array.isArray(data) ? data : data?.downloads || [];
+    return { online: true, downloads };
   } catch {
-    return [];
+    return { online: false, downloads: [] };
   }
 }
 

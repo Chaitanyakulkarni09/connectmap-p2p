@@ -46,9 +46,9 @@ export default function Dashboard() {
   // ── poll Python client ────────────────────────────────────────────────────
   useEffect(() => {
     const poll = async () => {
-      const downloads = await getAllDownloads();
-      if (downloads.length > 0) {
-        setClientOnline(true);
+      const { online, downloads } = await getAllDownloads();
+      setClientOnline(online);
+      if (online && downloads.length > 0) {
         setTransfers(downloads.map((d) => ({
           id:       d.info_hash,
           name:     d.name || d.info_hash,
@@ -66,7 +66,6 @@ export default function Dashboard() {
         const totalUl    = downloads.reduce((s, d) => s + (d.upload_rate  || 0), 0);
         setStats((prev) => ({ ...prev, totalDl, totalUl }));
       } else {
-        setClientOnline(false);
         setTransfers([]);
         setStats((prev) => ({ ...prev, totalDl: 0, totalUl: 0 }));
       }

@@ -113,6 +113,9 @@ def start_download():
         h = ses.add_torrent(params)
         h.set_flags(lt.torrent_flags.sequential_download)
 
+        # Announce to our own tracker so the Peers page shows activity
+        h.add_tracker({'url': 'https://connectmap-p2p.onrender.com/announce', 'tier': 0})
+
         info_hash = _hex(info.info_hashes().v1) if info.info_hashes().has_v1() else _hex(info.info_hash())
 
         with handles_lock:

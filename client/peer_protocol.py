@@ -59,12 +59,13 @@ class PeerConnection:
         self.connected = False
         self._lock = threading.Lock()
 
-    def connect(self, timeout: int = 10) -> bool:
+    def connect(self, timeout: int = 15) -> bool:
         """Establish TCP connection to the peer."""
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.settimeout(timeout)
             self.sock.connect((self.ip, self.port))
+            self.sock.settimeout(5)  # shorter timeout for reads after connect
             self.connected = True
             print(f"[Peer] Connected to {self.ip}:{self.port}")
             return True
@@ -176,7 +177,7 @@ class PeerConnection:
             return msg_id, payload
 
         except socket.timeout:
-            return None, None
+            return None, None  # Normal — just no message yet, keep waiting
         except Exception as e:
             print(f"[Peer] Read error from {self.ip}:{self.port}: {e}")
             self.connected = False

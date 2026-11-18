@@ -42,6 +42,7 @@ class PieceManager:
         self.piece_buffers = {}
 
         self._lock = threading.Lock()
+        self._bytes_in_progress = 0  # bytes received including partial pieces
 
     def update_peer_bitfield(self, peer_key: str, bitfield: list):
         """Register a peer's bitfield (which pieces they have)."""
@@ -123,6 +124,7 @@ class PieceManager:
             if index not in self.piece_buffers:
                 self.piece_buffers[index] = {}
             self.piece_buffers[index][begin] = block
+            self._bytes_in_progress += len(block)
 
     def is_piece_complete(self, index: int) -> bool:
         """Check if all blocks for a piece have been received."""
@@ -192,10 +194,11 @@ class PieceManager:
 
     @property
     def bytes_downloaded(self) -> int:
-        """Approximate bytes downloaded (completed pieces)."""
+        """Bytes downloaded including partial pieces in progress."""
+        completed = self.completed_count * self.piece_length
         if self.completed_count == self.piece_count:
             return self.total_size
-        return self.completed_count * self.piece_length
+        return min(completed + self._bytes_in_progress, self.total_size)
 
     def get_endgame_pieces(self) -> list:
         """

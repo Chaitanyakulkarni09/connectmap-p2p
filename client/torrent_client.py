@@ -246,11 +246,30 @@ class DownloadTask:
         peer_key = f"{peer.ip}:{peer.port}"
 
         try:
-            # Send interested
+            # Send interested immediately after handshake
             peer.send_interested()
+
+            last_keepalive = time.time()
+            last_interested = time.time()
 
             while peer.connected and not self._stop:
                 msg_id, payload = peer.read_message()
+
+                # Send keep-alive every 30s to prevent timeout
+                if time.time() - last_keepalive > 30:
+                    try:
+                        peer.sock.sendall(b'\x00\x00\x00\x00')
+                        last_keepalive = time.time()
+                    except Exception:
+                        break
+
+                # Re-send INTERESTED every 15s while still choked
+                if peer.peer_choking and time.time() - last_interested > 15:
+                    try:
+                        peer.send_interested()
+                        last_interested = time.time()
+                    except Exception:
+                        break
 
                 if msg_id is None:
                     continue
@@ -264,6 +283,13 @@ class DownloadTask:
                     self.piece_manager.update_peer_bitfield(
                         peer_key, peer.peer_bitfield
                     )
+                    # Re-send INTERESTED right after bitfield — peer now knows
+                    # what we want and will decide whether to unchoke us
+                    try:
+                        peer.send_interested()
+                        last_interested = time.time()
+                    except Exception:
+                        break
 
                 # Handle HAVE
                 if msg_id == HAVE:
@@ -320,23 +346,30 @@ class DownloadTask:
             self.piece_manager.remove_peer(peer_key)
 
     def _request_pieces(self, peer: PeerConnection, peer_key: str):
-        """Request the next piece from a peer using rarest-first."""
+        """
+        Request multiple pieces from a peer using rarest-first with pipelining.
+        Keeps up to MAX_PIPELINE pieces in-flight at once for real throughput.
+        """
         if peer.peer_choking:
             return
 
-        piece_index = self.piece_manager.select_piece(peer_key)
-        if piece_index < 0:
-            return
+        MAX_PIPELINE = 8  # request up to 8 pieces at once
 
-        piece_size = self.piece_manager.get_piece_size(piece_index)
+        requested = 0
+        while requested < MAX_PIPELINE:
+            piece_index = self.piece_manager.select_piece(peer_key)
+            if piece_index < 0:
+                break
 
-        # Request all blocks for this piece
-        offset = 0
-        while offset < piece_size:
-            block_size = min(BLOCK_SIZE, piece_size - offset)
-            peer.send_request(piece_index, offset, block_size)
-            offset += block_size
-
+            piece_size = self.piece_manager.get_piece_size(piece_index)
+            offset = 0
+            while offset < piece_size:
+                block_size = min(BLOCK_SIZE, piece_size - offset)
+                try:
+                    peer.send_request(piece_index, offset, block_size)
+                except Exception:
+                    return
+                offset += block_size
     def _rechoke(self):
         """
         Tit-for-tat choking algorithm.

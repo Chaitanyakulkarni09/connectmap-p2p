@@ -1,6 +1,26 @@
 services:
+  # ── Main Node.js backend + frontend ──────────────────────────────────────
   - type: web
-    name: bittorrent-p2p
+    name: connectmap-backend
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PYTHON_CLIENT_URL
+        fromService:
+          name: connectmap-python-client
+          type: web
+          property: host
+
+  # ── Python torrent client ─────────────────────────────────────────────────
+  - type: web
+    name: connectmap-python-client
+    runtime: python
+    rootDir: client
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 status_server:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0

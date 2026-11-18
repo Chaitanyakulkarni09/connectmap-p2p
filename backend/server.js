@@ -172,16 +172,29 @@ app.post('/api/client/stop/:infoHash', async (req, res) => {
 
 
 // ── fetchJSON ─────────────────────────────────────────────────────────────────
+// ngrok-skip-browser-warning bypasses ngrok's HTML interception page
+const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true', 'User-Agent': 'BitTorrent-Backend/1.0' };
+
 function fetchJSON(url) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith('https') ? https : http;
-    client.get(url, (resp) => {
+    const urlObj = new URL(url);
+    const opts = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || (url.startsWith('https') ? 443 : 80),
+      path: urlObj.pathname + urlObj.search,
+      method: 'GET',
+      headers: NGROK_HEADERS,
+    };
+    const req = client.request(opts, (resp) => {
       let data = '';
       resp.on('data', (chunk) => { data += chunk; });
       resp.on('end', () => {
         try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
       });
-    }).on('error', reject);
+    });
+    req.on('error', reject);
+    req.end();
   });
 }
 
@@ -195,7 +208,7 @@ function fetchPost(url, body) {
       port: urlObj.port || (url.startsWith('https') ? 443 : 80),
       path: urlObj.pathname + urlObj.search,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...NGROK_HEADERS },
     };
     const req = client.request(opts, (resp) => {
       let data = '';

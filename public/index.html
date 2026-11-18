@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Multi-Tool Workspace</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --panel-bg: rgba(0, 0, 0, 0.4);
+            --text-color: #3fb950;
+            --accent-color: #2ea043;
+            --border-color: #30363d;
+            --me-chat-bg: #1f6feb;
+            --them-chat-bg: #238636;
+            --warning-color: #d29922;
+            --error-color: #f85149;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            text-align: center;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* LOBBY UI */
+        .lobby-container {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .mode-card {
+            border: 2px solid var(--border-color);
+            padding: 15px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            flex: 1;
+            min-width: 100px;
+            transition: all 0.2s;
+            font-weight: bold;
+            color: #8b949e;
+        }
+
+        .mode-card:hover { border-color: var(--accent-color); color: var(--text-color); }
+        .mode-card.active {
+            background: rgba(46, 160, 67, 0.1);
+            border-color: var(--accent-color);
+            color: var(--text-color);
+        }
+
+        .setup-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        input[type="text"] {
+            font-family: inherit;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 1.2em;
+            letter-spacing: 2px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            font-family: inherit;
+            background: var(--accent-color);
+            color: #ffffff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            width: 100%;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.8; }
+        button:disabled { background: var(--border-color); cursor: not-allowed; color: #8b949e; }
+
+        /* ROOM UI */
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .status-dot { display: inline-block; width: 10px; height: 10px; background: var(--error-color); border-radius: 50%; margin-right: 5px; }
+        .status-dot.connected { background: var(--accent-color); box-shadow: 0 0 8px var(--accent-color); }
+
+        .app-panel { display: none; }
+        .app-panel.active { display: block; }
+
+        /* --- FILES EXTENSION --- */
+        .files-grid { display: flex; gap: 20px; }
+        .files-col { flex: 1; background: var(--panel-bg); padding: 20px; border: 1px solid var(--border-color); border-radius: 8px; }
+        .dropzone {
+            border: 2px dashed var(--border-color); padding: 30px 20px; text-align: center;
+            border-radius: 8px; cursor: pointer; transition: 0.2s; margin-bottom: 15px;
+        }
+        .dropzone:hover, .dropzone.dragover { background: rgba(46, 160, 67, 0.1); border-color: var(--accent-color); }
+        .progress-bar { width: 100%; height: 20px; background: var(--border-color); border-radius: 10px; overflow: hidden; margin-top: 15px; position: relative; }
+        .progress-fill { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.1s linear; }
+        .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 0.8em; text-shadow: 1px 1px 2px black; }
+
+        /* --- VIDEO EXTENSION --- */
+        .video-grid { display: flex; gap: 20px; justify-content: center; }
+        .video-box { position: relative; width: 45%; aspect-ratio: 4/3; background: #000; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        #local-video { transform: scaleX(-1); }
+        .video-label { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; }
+        .video-controls { display:flex; gap:12px; justify-content:center; margin-top:16px; }
+        .vc-btn { width:48px; height:48px; border-radius:50%; border:2px solid var(--border-color); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1.3em; background:rgba(255,255,255,0.05); transition:all 0.2s; }
+        .vc-btn:hover { background:rgba(255,255,255,0.15); }
+        .vc-btn.active-off { border-color:var(--error-color); background:rgba(248,81,73,0.15); }
+        .vc-btn.end-call { border-color:var(--error-color); background:var(--error-color); color:#fff; width:56px; height:56px; font-size:1.5em; }
+        .vc-btn.end-call:hover { opacity:0.85; }
+        .video-waiting { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.85); color:#8b949e; font-size:0.75em; gap:8px; }
+
+        /* --- CHAT EXTENSION --- */
+        .chat-container { max-width: 600px; margin: 0 auto; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; height: 500px; display: flex; flex-direction: column; }
+        .chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; padding-right: 10px; }
+        .chat-msg { max-width: 80%; padding: 8px 12px; border-radius: 8px; color: white; word-wrap: break-word; }
+        .msg-me { align-self: flex-end; background: var(--me-chat-bg); border-bottom-right-radius: 0; }
+        .msg-them { align-self: flex-start; background: var(--them-chat-bg); border-bottom-left-radius: 0; }
+
+        /* --- GAME EXTENSION --- */
+        .game-container { text-align: center; }
+        .board { display: grid; grid-template-columns: repeat(3, 100px); grid-template-rows: repeat(3, 100px); gap: 5px; background: var(--border-color); padding: 5px; border-radius: 8px; margin: 20px auto; width:fit-content; }
+        .cell { background: var(--bg-color); display: flex; align-items: center; justify-content: center; font-size: 3em; font-weight: bold; cursor: pointer; color: white; }
+        .cell:hover { background: rgba(255,255,255,0.1); }
+        .game-status { font-size: 1.2em; margin-bottom: 10px; }
+
+        .hidden { display: none !important; }
+        @media (max-width: 800px) { .files-grid { flex-direction: column; } .video-grid { flex-direction: column; } .video-box { width: 100%; } }
+    </style>
+</head>
+<body>
+
+<h1>P2P Multi-Tool Workspace</h1>
+
+<!-- LOBBY UI -->
+<div id="lobby-ui" class="lobby-container">
+    <h2>1. Select Room Type</h2>
+    <div class="mode-selector">
+        <div class="mode-card active" data-mode="files">📁<br>File Share</div>
+        <div class="mode-card" data-mode="video">🎥<br>Video Call</div>
+        <div class="mode-card" data-mode="chat">💬<br>Secure Chat</div>
+        <div class="mode-card" data-mode="game">🎮<br>Tic-Tac-Toe</div>
+    </div>
+
+    <h2>2. Connect</h2>
+    <div class="setup-actions">
+        <button id="btn-create">Create Dedicated Room</button>
+        <div style="color: var(--border-color);">— OR —</div>
+        <input type="text" id="input-join" placeholder="Enter 6-Letter Code" maxlength="6" />
+        <button id="btn-join" disabled>Join Room</button>
+    </div>
+    <div id="setup-msg" style="margin-top:15px; color:#8b949e;"></div>
+</div>
+
+<!-- ACTIVE ROOM UI -->
+<div id="room-ui" class="hidden">
+    <div class="room-header">
+        <div>
+            <strong>Mode:</strong> <span id="hdr-mode" style="color:var(--accent-color); text-transform:uppercase;"></span>
+        </div>
+        <div style="font-size: 1.5em; letter-spacing: 3px;" id="hdr-code">------</div>
+        <div>
+            <span class="status-dot" id="status-dot"></span>
+            <span id="status-text">Waiting for peer...</span>
+        </div>
+    </div>
+
+    <!-- APP: FILES -->
+    <div id="app-files" class="app-panel">
+        <div class="files-grid">
+            <div class="files-col">
+                <h3 style="text-align:center; margin-top:0;">Send File</h3>
+                <div class="dropzone" id="dropzone">
+                    <p>Drag & Drop a file here</p>
+                    <span style="color: var(--border-color);">— OR —</span><br><br>
+                    <button id="btn-browse" style="width:auto; padding: 8px 16px;">Browse Files</button>
+                    <input type="file" id="file-input" style="display:none;" accept="*/*">
+                </div>
+                <div id="send-status" class="hidden">
+                    <div>Sending: <span id="send-name"></span></div>
+                    <div class="progress-bar"><div class="progress-fill" id="send-fill"></div><div class="progress-text" id="send-text">0%</div></div>
+                </div>
+            </div>
+            <div class="files-col">
+                <h3 style="text-align:center; margin-top:0;">Receive File</h3>
+                <div style="text-align:center; color:#8b949e; margin-bottom: 20px;">Waiting for peer to send a file...</div>
+                <div id="recv-status" class="hidden">
+                    <div>Receiving: <span id="recv-name"></span></div>
+                    <div class="progress-bar"><div class="progress-fill" id="recv-fill" style="background:var(--me-chat-bg)"></div><div class="progress-text" id="recv-text">0%</div></div>
+                    <button id="btn-save-file" class="hidden" style="margin-top: 15px; background:var(--me-chat-bg)">Save File 💾</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP: VIDEO -->
+    <div id="app-video" class="app-panel">
+        <div class="video-grid">
+            <div class="video-box">
+                <video id="local-video" autoplay muted playsinline></video>
+                <div class="video-label">YOU</div>
+            </div>
+            <div class="video-box">
+                <video id="remote-video" autoplay playsinline></video>
+                <div class="video-label">PEER</div>
+                <div class="video-waiting" id="remote-waiting">
+                    <span style="font-size:2em">📡</span>
+                    <span>Waiting for peer...</span>
+                </div>
+            </div>
+        </div>
+        <div class="video-controls">
+            <button class="vc-btn" id="btn-mute" title="Mute/Unmute">🎤</button>
+            <button class="vc-btn" id="btn-cam" title="Toggle Camera">📷</button>
+            <button class="vc-btn end-call" id="btn-end-call" title="End Call">📵</button>
+        </div>
+    </div>
+
+    <!-- APP: CHAT -->
+    <div id="app-chat" class="app-panel">
+        <div class="chat-container">
+            <div class="chat-log" id="chat-log">
+                <div style="text-align: center; color: #8b949e; font-size: 0.8em; margin-bottom: 10px;">Secure Room Created. Chat is end-to-end encrypted.</div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <input type="text" id="chat-input" placeholder="Type a message..." disabled>
+                <button id="btn-send-chat" disabled style="width:100px;">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP: GAME -->
+    <div id="app-game" class="app-panel">
+        <div class="game-container">
+            <div id="game-status" class="game-status">Waiting for peer...</div>
+            <div class="board" id="board">
+                <div class="cell" data-index="0"></div><div class="cell" data-index="1"></div><div class="cell" data-index="2"></div>
+                <div class="cell" data-index="3"></div><div class="cell" data-index="4"></div><div class="cell" data-index="5"></div>
+                <div class="cell" data-index="6"></div><div class="cell" data-index="7"></div><div class="cell" data-index="8"></div>
+            </div>
+            <button id="btn-restart" class="hidden" style="width:200px; margin:0 auto; background:var(--border-color);">Play Again</button>
+            <div style="margin-top: 15px; color:#8b949e;">You are: <strong id="game-symbol" style="color:white; font-size:1.5em;">-</strong></div>
+        </div>
+    </div>
+
+</div>
+
+<div style="text-align: center; margin-top: 40px; font-size: 0.8em; color: #8b949e;">EDI 3 Project</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io(window.location.origin);
+    
+    // Connection Status handling
+    socket.on('connect', () => {
+        document.getElementById('setup-msg').textContent = "Server Connected! Ready to create room.";
+    });
+    socket.on('connect_error', () => {
+        document.getElementById('setup-msg').textContent = "Server Connection Failed! Are you on Cloudflare? Ensure your backend URL is correct!";
+        document.getElementById('btn-create').disabled = true;
+        document.getElementById('btn-join').disabled = true;
+    });
+
+    // State
+    let selectedMode = 'files'; // default
+    let isHost = false;
+    let roomCode = null;
+    let pc = null;
+    let dc = null;
+    
+    // Lobby UI
+    const modeCards = document.querySelectorAll('.mode-card');
+    const btnCreate = document.getElementById('btn-create');
+    const inputJoin = document.getElementById('input-join');
+    const btnJoin = document.getElementById('btn-join');
+    const setupMsg = document.getElementById('setup-msg');
+    
+    // Room UI
+    const lobbyUi = document.getElementById('lobby-ui');
+    const roomUi = document.getElementById('room-ui');
+    const hdrMode = document.getElementById('hdr-mode');
+    const hdrCode = document.getElementById('hdr-code');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+
+    // MODE SELECTION
+    modeCards.forEach(card => {
+        card.addEventListener('click', () => {
+            modeCards.forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+            selectedMode = card.getAttribute('data-mode');
+        });
+    });
+
+    inputJoin.addEventListener('input', (e) => { btnJoin.disabled = e.target.value.length !== 6; });
+
+    function genCode() {
+        const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let res = ''; for(let i=0; i<6; i++) res += c.charAt(Math.floor(Math.random()*c.length));
+        return res;
+    }
+
+    // ACTIVATE MODE UI
+    async function activateModeUI(mode) {
+        document.querySelectorAll('.app-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById(`app-${mode}`).classList.add('active');
+        hdrMode.textContent = mode;
+        hdrCode.textContent = roomCode;
+        lobbyUi.classList.add('hidden');
+        roomUi.classList.remove('hidden');
+
+        if (mode === 'video') await startVideo();
+        if (mode === 'game') initGameUI();
+    }
+
+    btnCreate.addEventListener('click', () => {
+        isHost = true;
+        roomCode = genCode();
+        btnCreate.disabled = true; btnJoin.disabled = true;
+        setupMsg.textContent = "Creating room...";
+        socket.emit('join-room', roomCode, selectedMode);
+    });
+
+    btnJoin.addEventListener('click', () => {
+        isHost = false;
+        roomCode = inputJoin.value.toUpperCase();
+        btnCreate.disabled = true; btnJoin.disabled = true;
+        setupMsg.textContent = "Joining room...";
+        socket.emit('join-room', roomCode, null); // Guest inherits mode from host
+    });
+
+    // SIGNALING
+    socket.on('room-created', (code, mode) => {
+        setupMsg.textContent = "Room Created!";
+        activateModeUI(mode || selectedMode || 'files');
+    });
+
+    socket.on('room-joined', (code, mode) => {
+        selectedMode = mode || 'files'; // Host dictates mode!
+        setupMsg.textContent = "Room Joined!";
+        activateModeUI(selectedMode);
+        statusText.textContent = "Connecting to peer...";
+    });
+
+    socket.on('guest-joined', async (guestId) => {
+        if (!isHost) return;
+        statusDot.classList.add('connected');
+        statusText.textContent = "Peer connected! Establishing P2P...";
+
+        // For video mode: acquire camera FIRST so tracks are ready before createPeerConnection
+        if (selectedMode === 'video' && !localStream) await startVideo();
+
+        pc = createPeerConnection(guestId);
+        dc = pc.createDataChannel('p2p', { ordered: true });
+        setupDataChannel(dc);
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('offer', roomCode, offer, guestId);
+    });
+
+    socket.on('offer', async (sdp, hostId) => {
+        if (isHost) return;
+        statusDot.classList.add('connected');
+        statusText.textContent = "Receiving connection...";
+
+        // For video mode: acquire camera FIRST so tracks are ready before createPeerConnection
+        if (selectedMode === 'video' && !localStream) await startVideo();
+
+        pc = createPeerConnection(hostId);
+        pc.ondatachannel = (e) => { dc = e.channel; setupDataChannel(dc); };
+
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('answer', roomCode, answer, hostId);
+    });
+
+    socket.on('answer', async sdp => { if(pc) await pc.setRemoteDescription(new RTCSessionDescription(sdp)); });
+    // Buffer ICE candidates if remote description isn't set yet
+    const pendingCandidates = [];
+    socket.on('ice-candidate', async c => {
+        if (pc && pc.remoteDescription) {
+            await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+        } else {
+            pendingCandidates.push(c);
+        }
+    });
+
+    socket.on('peer-disconnected', () => {
+        statusDot.classList.remove('connected');
+        statusText.textContent = "Peer Disconnected.";
+        if(selectedMode === 'chat') { chatInput.disabled = true; btnSendChat.disabled = true; }
+        if(selectedMode === 'game') { gameActive = false; }
+        if(selectedMode === 'video') {
+            const rv = document.getElementById('remote-video');
+            if (rv) rv.srcObject = null;
+            const w = document.getElementById('remote-waiting');
+            if (w) { w.style.display = 'flex'; w.innerHTML = '<span style="font-size:2em">📴</span><span>Peer disconnected</span>'; }
+        }
+    });
+
+    function createPeerConnection(targetId) {
+        const pc = new RTCPeerConnection({ iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]});
+        // localStream is guaranteed to exist before this is called in video mode
+        if (selectedMode === 'video' && localStream) {
+            localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+        }
+        pc.ontrack = (e) => {
+            const rv = document.getElementById('remote-video');
+            if (rv && rv.srcObject !== e.streams[0]) {
+                rv.srcObject = e.streams[0];
+                const w = document.getElementById('remote-waiting');
+                if (w) w.style.display = 'none';
+            }
+        };
+        pc.onicecandidate = (e) => { if (e.candidate) socket.emit('ice-candidate', roomCode, e.candidate, targetId); };
+        pc.onconnectionstatechange = () => {
+            if (pc.connectionState === 'connected') {
+                statusDot.classList.add('connected');
+                statusText.textContent = 'Secure P2P Connected!';
+            }
+        };
+        return pc;
+    }
+
+    function setupDataChannel(channel) {
+        channel.binaryType = 'arraybuffer';
+        channel.onopen = () => {
+            statusText.textContent = "Secure P2P Connected!";
+            if (selectedMode === 'chat') { chatInput.disabled = false; btnSendChat.disabled = false; }
+            if (selectedMode === 'game') startGame();
+        };
+
+        channel.onmessage = async (e) => {
+            if (selectedMode === 'files') await handleFilMessage(e.data);
+            if (selectedMode === 'chat') handleChatMessage(e.data);
+            if (selectedMode === 'game') handleGameMessage(e.data);
+        };
+    }
+
+    // ==========================================
+    // APP 1: FILES
+    // ==========================================
+    const CHUNK_SIZE = 16384;
+    let fileChunks = [];
+    let receiveBuffer = [];
+    let receivedChunksCount = 0;
+    let incomingFileInfo = null;
+
+    const fileInput = document.getElementById('file-input');
+    const dropzone = document.getElementById('dropzone');
+    
+    document.getElementById('btn-browse').onclick = () => fileInput.click();
+    dropzone.ondragover = e => { e.preventDefault(); dropzone.classList.add('dragover'); };
+    dropzone.ondragleave = e => { e.preventDefault(); dropzone.classList.remove('dragover'); };
+    dropzone.ondrop = e => {
+        e.preventDefault(); dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) startFileSend(e.dataTransfer.files[0]);
+    };
+    fileInput.onchange = e => { if(e.target.files.length) startFileSend(e.target.files[0]); };
+
+    async function hashBuffer(buffer) {
+        const h = await crypto.subtle.digest('SHA-256', buffer);
+        return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+
+    async function startFileSend(file) {
+        if (!dc || dc.readyState !== 'open') return alert("Wait for peer to connect!");
+        
+        document.getElementById('send-status').classList.remove('hidden');
+        document.getElementById('send-name').textContent = file.name;
+        document.getElementById('send-text').textContent = "Hashing...";
+        await new Promise(r => setTimeout(r, 50));
+        
+        fileChunks = [];
+        const total = Math.ceil(file.size / CHUNK_SIZE);
+        for(let i=0; i<total; i++) {
+            const buf = await file.slice(i*CHUNK_SIZE, Math.min(file.size, (i+1)*CHUNK_SIZE)).arrayBuffer();
+            fileChunks.push({ index: i, buffer: buf, hash: await hashBuffer(buf) });
+        }
+
+        dc.send(JSON.stringify({ type: 'file_meta', name: file.name, size: file.size, typeStr: file.type, total: total }));
+        document.getElementById('send-text').textContent = "Requesting transfer...";
+    }
+
+    async function handleFilMessage(data) {
+        if (typeof data === 'string') {
+            const msg = JSON.parse(data);
+            if (msg.type === 'file_meta') {
+                incomingFileInfo = msg; receiveBuffer = new Array(msg.total); receivedChunksCount = 0;
+                document.getElementById('recv-status').classList.remove('hidden');
+                document.getElementById('btn-save-file').classList.add('hidden');
+                document.getElementById('recv-name').textContent = msg.name;
+                dc.send(JSON.stringify({ type: 'file_ready' }));
+            }
+            if (msg.type === 'file_ready') streamFileChunks();
+        } else if (data instanceof ArrayBuffer) {
+            const v = new DataView(data); const index = v.getUint32(0, true);
+            const dataBuffer = data.slice(68);
+            receiveBuffer[index] = dataBuffer;
+            receivedChunksCount++;
+
+            const pct = (receivedChunksCount / incomingFileInfo.total) * 100;
+            document.getElementById('recv-fill').style.width = pct + '%';
+            document.getElementById('recv-text').textContent = Math.round(pct) + '%';
+
+            if (receivedChunksCount === incomingFileInfo.total) {
+                document.getElementById('recv-text').textContent = '100% Complete!';
+                document.getElementById('btn-save-file').classList.remove('hidden');
+                document.getElementById('btn-save-file').onclick = () => {
+                    const blob = new Blob(receiveBuffer, { type: incomingFileInfo.typeStr });
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = incomingFileInfo.name; a.click();
+                };
+            }
+        }
+    }
+
+    function streamFileChunks() {
+        let curr = 0;
+        function next() {
+            if (curr >= fileChunks.length) { document.getElementById('send-text').textContent = "Done!"; return; }
+            if (dc.bufferedAmount > 65536) { dc.onbufferedamountlow = () => { dc.onbufferedamountlow=null; next(); }; return; }
+
+            const c = fileChunks[curr];
+            const buf = new ArrayBuffer(4 + 64 + c.buffer.byteLength);
+            const v = new DataView(buf); const u8 = new Uint8Array(buf);
+            v.setUint32(0, c.index, true);
+            u8.set(new TextEncoder().encode(c.hash), 4);
+            u8.set(new Uint8Array(c.buffer), 68);
+            dc.send(buf);
+            curr++;
+
+            const pct = (curr/fileChunks.length)*100;
+            document.getElementById('send-fill').style.width = pct+'%';
+            document.getElementById('send-text').textContent = Math.round(pct)+'%';
+            setTimeout(next, 0);
+        }
+        next();
+    }
+
+    // ==========================================
+    // APP 2: VIDEO
+    // ==========================================
+    let localStream;
+    let micMuted = false;
+    let camOff = false;
+
+    async function startVideo() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+            document.getElementById('local-video').srcObject = localStream;
+            // NOTE: Do NOT add tracks to pc here — pc doesn't exist yet at this point.
+            // Tracks are added in createPeerConnection() which is always called AFTER startVideo().
+        } catch(e) {
+            statusText.textContent = '⚠ Camera / mic access denied';
+        }
+    }
+
+    // Video controls
+    document.getElementById('btn-mute').onclick = () => {
+        if (!localStream) return;
+        micMuted = !micMuted;
+        localStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
+        document.getElementById('btn-mute').textContent = micMuted ? '🔇' : '🎤';
+        document.getElementById('btn-mute').classList.toggle('active-off', micMuted);
+    };
+    document.getElementById('btn-cam').onclick = () => {
+        if (!localStream) return;
+        camOff = !camOff;
+        localStream.getVideoTracks().forEach(t => t.enabled = !camOff);
+        document.getElementById('btn-cam').textContent = camOff ? '🚫' : '📷';
+        document.getElementById('btn-cam').classList.toggle('active-off', camOff);
+    };
+    document.getElementById('btn-end-call').onclick = () => {
+        if (pc) { pc.close(); pc = null; }
+        if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+        const lv = document.getElementById('local-video');
+        const rv = document.getElementById('remote-video');
+        if (lv) lv.srcObject = null;
+        if (rv) rv.srcObject = null;
+        statusDot.classList.remove('connected');
+        statusText.textContent = 'Call ended.';
+        micMuted = false; camOff = false;
+        document.getElementById('btn-mute').textContent = '🎤';
+        document.getElementById('btn-cam').textContent = '📷';
+        document.getElementById('btn-mute').classList.remove('active-off');
+        document.getElementById('btn-cam').classList.remove('active-off');
+    };
+
+    // ==========================================
+    // APP 3: CHAT
+    // ==========================================
+    const chatInput = document.getElementById('chat-input');
+    const btnSendChat = document.getElementById('btn-send-chat');
+    const chatLog = document.getElementById('chat-log');
+    
+    function sendChat() {
+        const text = chatInput.value.trim();
+        if (text && dc) { dc.send(JSON.stringify({ type: 'chat_msg', text })); addChat(text, true); chatInput.value = ''; }
+    }
+    btnSendChat.onclick = sendChat; chatInput.onkeypress = e => { if(e.key==='Enter') sendChat(); };
+    function handleChatMessage(data) {
+        if(typeof data === 'string') { const msg = JSON.parse(data); if(msg.type==='chat_msg') addChat(msg.text, false); }
+    }
+    function addChat(txt, me) {
+        const d = document.createElement('div'); d.className=`chat-msg ${me?'msg-me':'msg-them'}`;
+        d.textContent = txt; chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    // ==========================================
+    // APP 4: GAME
+    // ==========================================
+    let bState, mySym, currTurn, gameActive;
+    const cells = document.querySelectorAll('.cell');
+    const statusGame = document.getElementById('game-status');
+    const btnRestart = document.getElementById('btn-restart');
+
+    function initGameUI() {
+        mySym = isHost ? 'X' : 'O';
+        document.getElementById('game-symbol').textContent = mySym;
+    }
+
+    function startGame() {
+        bState = Array(9).fill(null); currTurn = 'X'; gameActive = true;
+        btnRestart.classList.add('hidden'); renderBoard(); updateGame();
+    }
+
+    cells.forEach(c => c.onclick = () => {
+        const i = parseInt(c.dataset.index);
+        if(!gameActive || bState[i] || currTurn !== mySym) return;
+        bState[i] = mySym; currTurn = mySym==='X'?'O':'X';
+        renderBoard(); dc.send(JSON.stringify({type:'game_move', index:i}));
+        checkWin(); updateGame();
+    });
+
+    function handleGameMessage(data) {
+        if(typeof data === 'string') {
+            const m = JSON.parse(data);
+            if(m.type==='game_move') { bState[m.index] = mySym==='X'?'O':'X'; currTurn = mySym; renderBoard(); checkWin(); updateGame(); }
+            if(m.type==='game_restart') startGame();
+        }
+    }
+
+    function renderBoard() {
+        for(let i=0; i<9; i++) { cells[i].textContent = bState[i]||''; cells[i].className = `cell ${bState[i]?bState[i].toLowerCase():''}`; }
+    }
+
+    function checkWin() {
+        const w = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+        for(let l of w) { const [a,b,c]=l; if(bState[a] && bState[a]===bState[b] && bState[a]===bState[c]) {
+            gameActive = false; statusGame.innerHTML = bState[a]===mySym ? `<span style="color:var(--accent-color)">You Won!</span>` : `<span style="color:var(--error-color)">You Lost!</span>`;
+            btnRestart.classList.remove('hidden'); return;
+        }}
+        if(!bState.includes(null)) { gameActive=false; statusGame.innerHTML=`<span style="color:var(--warning-color)">Draw!</span>`; btnRestart.classList.remove('hidden'); }
+    }
+    function updateGame() { if(gameActive) statusGame.textContent = currTurn===mySym ? "Your turn!" : "Waiting for peer..."; }
+    btnRestart.onclick = () => { dc.send(JSON.stringify({type:'game_restart'})); startGame(); };
+</script>
+
+</body>
+</html>

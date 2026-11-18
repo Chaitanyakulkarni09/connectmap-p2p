@@ -1,0 +1,18 @@
+{
+  "name": "bittorrent-p2p",
+  "version": "1.0.0",
+  "description": "BitTorrent-style P2P Web App - EDI 3",
+  "main": "server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "build": "npm --prefix frontend install && npm run build --prefix frontend && npm --prefix backend install",
+    "dev": "concurrently --restart-tries 2 --prefix-colors \"cyan.bold,yellow.bold\" --names \"BACKEND,FRONTEND\" \"node backend/server.js\" \"npm run dev --prefix frontend\""
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

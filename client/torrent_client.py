@@ -71,12 +71,31 @@ class TorrentClient:
             total_size = info.get('length', 0)
             files.append({'path': name, 'size': total_size})
 
-        # Tracker URL
+        # Tracker URL — try all tiers until we get peers
         announce = data.get('announce', b'')
         if isinstance(announce, bytes):
             announce = announce.decode('utf-8', errors='replace')
-        if not announce:
-            announce = 'http://localhost:6969/announce'
+
+        # Build full list of tracker URLs from announce-list
+        tracker_urls = []
+        if announce:
+            tracker_urls.append(announce)
+        announce_list = data.get('announce-list', [])
+        for tier in announce_list:
+            for url in tier:
+                if isinstance(url, bytes):
+                    url = url.decode('utf-8', errors='replace')
+                if url and url not in tracker_urls:
+                    tracker_urls.append(url)
+
+        # Filter to HTTP/HTTPS only (UDP not implemented)
+        http_trackers = [u for u in tracker_urls if u.startswith('http')]
+        if not http_trackers:
+            http_trackers = ['http://localhost:6969/announce']
+
+        print(f"[Client] Found {len(http_trackers)} HTTP tracker(s)")
+        # Use first HTTP tracker as primary; DownloadTask will try others on failure
+        announce = http_trackers[0]
 
         print(f"\n{'='*60}")
         print(f"Torrent: {name}")
@@ -97,7 +116,7 @@ class TorrentClient:
             piece_hashes=piece_hashes,
             total_size=total_size,
             files=files,
-            tracker_url=announce,
+            tracker_urls=http_trackers,
             save_path=save_path,
             peer_id=self.peer_id,
             port=self.port,
@@ -133,11 +152,11 @@ class DownloadTask:
 
     def __init__(self, info_hash, info_hash_hex, name, piece_count,
                  piece_length, piece_hashes, total_size, files,
-                 tracker_url, save_path, peer_id, port):
+                 tracker_urls, save_path, peer_id, port):
         self.info_hash = info_hash
         self.info_hash_hex = info_hash_hex
         self.name = name
-        self.tracker_url = tracker_url
+        self.tracker_urls = tracker_urls if isinstance(tracker_urls, list) else [tracker_urls]
         self.save_path = save_path
         self.peer_id = peer_id
         self.port = port
@@ -146,7 +165,12 @@ class DownloadTask:
             piece_count, piece_length, total_size, piece_hashes
         )
         self.file_handler = FileHandler(save_path, files, piece_length, total_size)
-        self.tracker = TrackerClient(tracker_url, info_hash, peer_id, port)
+        # Create tracker clients for all URLs
+        self.trackers = [
+            TrackerClient(url, info_hash, peer_id, port)
+            for url in self.tracker_urls
+        ]
+        self.tracker = self.trackers[0]  # primary
 
         self.peers = []  # List of PeerConnection
         self.state = 'initializing'
@@ -167,24 +191,40 @@ class DownloadTask:
         self.start_time = time.time()
         self.state = 'started'
 
-        # 1. Announce to tracker
+        # 1. Announce to tracker — try all trackers until we get peers
         self.state = 'contacting tracker'
-        result = self.tracker.announce(
-            event='started',
-            left=self.piece_manager.total_size - self.piece_manager.bytes_downloaded
-        )
+        peer_list = []
 
-        peer_list = result.get('peers', [])
-        if not peer_list:
-            print("[Client] No peers found. Waiting...")
-            self.state = 'no peers'
-            # Keep trying
-            for attempt in range(10):
-                time.sleep(5)
-                result = self.tracker.announce(
+        for tracker in self.trackers:
+            try:
+                result = tracker.announce(
+                    event='started',
                     left=self.piece_manager.total_size - self.piece_manager.bytes_downloaded
                 )
                 peer_list = result.get('peers', [])
+                if peer_list:
+                    self.tracker = tracker  # use this one going forward
+                    print(f"[Client] Got {len(peer_list)} peers from {tracker.tracker_url}")
+                    break
+            except Exception as e:
+                print(f"[Client] Tracker {tracker.tracker_url} failed: {e}")
+                continue
+        if not peer_list:
+            print("[Client] No peers found. Trying all trackers...")
+            self.state = 'no peers'
+            for attempt in range(5):
+                time.sleep(5)
+                for tracker in self.trackers:
+                    try:
+                        result = tracker.announce(
+                            left=self.piece_manager.total_size - self.piece_manager.bytes_downloaded
+                        )
+                        peer_list = result.get('peers', [])
+                        if peer_list:
+                            self.tracker = tracker
+                            break
+                    except Exception:
+                        continue
                 if peer_list:
                     break
 
